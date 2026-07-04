@@ -25,6 +25,11 @@
 
 name: deploy
 on:
+  # Manual trigger: the seed push run.sh makes is a fresh ROOT commit with no common
+  # ancestor with the previous main, so GitHub cannot compute the changed files and the
+  # paths filter below silently skips the push (observed June 24 onward). Dispatch is the
+  # escape hatch — run `gh workflow run deploy --repo <owner>/vault` after a seed push.
+  workflow_dispatch:
   push:
     branches: [main]
     # Only deploy when something that actually affects the binary changes. The harness lands
