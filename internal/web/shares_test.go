@@ -2,6 +2,7 @@ package web
 
 import (
 	"context"
+	"bytes"
 	"crypto/sha256"
 	"database/sql"
 	"encoding/base64"
@@ -126,7 +127,7 @@ func TestShareCreatePersistsHashAndSealedBlobNotPlaintext(t *testing.T) {
 
 	// token_hash is SHA-256(token), never the raw token.
 	want := sha256.Sum256([]byte(token))
-	if string(tokenHash) != string(want[:]) {
+	if !bytes.Equal(tokenHash, want[:]) {
 		t.Fatalf("token_hash is not SHA-256(token)")
 	}
 	if strings.Contains(string(tokenHash), token) {
