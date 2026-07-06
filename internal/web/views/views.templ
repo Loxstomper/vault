@@ -89,6 +89,25 @@ templ LoginPage(errMsg string) {
 	}
 }
 
+// ShareReveal is the bare, public reveal-and-burn page (specs/share-links.md "Behavior →
+// Reveal" step 5), styled like LoginPage: it shows the secret's name and decrypted value
+// and states plainly that the link is now destroyed and cannot be reused. There is no
+// shell/nav (this route is reachable with no session), and no form — nothing to submit.
+templ ShareReveal(name, value string) {
+	@Layout("Shared secret") {
+		<main class="flex min-h-full items-center justify-center px-6">
+			<div class="w-full max-w-sm space-y-4 rounded-xl border border-slate-800 bg-slate-900/60 p-8">
+				<h1 class="text-lg font-semibold">Shared secret</h1>
+				<div class="space-y-1">
+					<div class="text-sm text-slate-400">{ name }</div>
+					<div class="select-all break-all rounded-md border border-slate-700 bg-slate-950 px-3 py-2 font-mono text-sm text-emerald-300">{ value }</div>
+				</div>
+				<p class="text-sm text-slate-400">This link has now been destroyed and cannot be used again.</p>
+			</div>
+		</main>
+	}
+}
+
 templ VaultPage(secrets []Secret, audit []Audit, query string, stats Stats) {
 	@Layout("Vault") {
 		@shell("vault")

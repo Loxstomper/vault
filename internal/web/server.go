@@ -86,10 +86,29 @@ func (s *Server) routes() {
 }
 
 // handleShareReveal is the reveal-and-burn half of the one-time share-link feature
-// (specs/share-links.md "Behavior → Reveal"). Skeleton only: the implementor supplies the
-// constant-time lookup, atomic single-use consumption, decryption, audit entry, and page.
+// (specs/share-links.md "Behavior → Reveal"). It hashes the presented token, atomically
+// reads-and-deletes the matching share row (store.ConsumeShare), and treats a missing row,
+// an expired row, and a decryption failure identically as a 404 with no content — wrong,
+// used, and expired tokens must be indistinguishable to the caller.
 func (s *Server) handleShareReveal(w http.ResponseWriter, r *http.Request) {
-	http.Error(w, "not implemented", http.StatusNotImplemented)
+	token := r.PathValue("token")
+	tokenHash := sha256.Sum256([]byte(token))
+	sh, err := s.st.ConsumeShare(r.Context(), tokenHash[:])
+	if err != nil {
+		// No match, expired, or already-consumed: all indistinguishable 404s
+		// (specs/share-links.md "Behavior → Reveal" closing paragraph).
+		http.NotFound(w, r)
+		return
+	}
+	plain, err := crypto.Open(crypto.DeriveKey(token, sh.Salt), sh.Ciphertext)
+	if err != nil {
+		// The row is already burned; a decrypt failure here (corrupt row) must still
+		// surface as the same 404, never a 500 that would distinguish it.
+		http.NotFound(w, r)
+		return
+	}
+	_ = s.st.AppendAudit(r.Context(), "share-reveal", sh.Name)
+	s.render(w, r, views.ShareReveal(sh.Name, string(plain)))
 }
 
 // handleShareCreate is the generate half of the one-time share-link feature
