@@ -4,6 +4,7 @@
 package web
 
 import (
+	"crypto/sha256"
 	"embed"
 	"errors"
 	"net/http"
@@ -20,6 +21,10 @@ import (
 var staticFS embed.FS
 
 const sessionTTL = 30 * time.Minute
+
+// shareTTL is fixed at 1 hour per specs/share-links.md ("Configurable expiry" is
+// explicitly out of scope).
+const shareTTL = time.Hour
 
 // Server wires the store and session table behind the HTTP routes.
 type Server struct {
@@ -76,10 +81,59 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("POST /secrets/{id}/share", s.auth(s.handleShareCreate))
 }
 
-// handleShareCreate is the generate half of the one-time share-link feature. Stub: the
-// real behavior is defined by the acceptance tests and supplied by the implementor.
-func (s *Server) handleShareCreate(w http.ResponseWriter, r *http.Request, _ session) {
-	w.WriteHeader(http.StatusNotImplemented)
+// handleShareCreate is the generate half of the one-time share-link feature
+// (specs/share-links.md "Behavior → Generate", "Token", "Model"). It opens the secret
+// with the session key, mints a token and a fresh salt, re-seals the plaintext under a
+// key derived from the token (never the master password or session key), and stores only
+// the token's SHA-256 hash — the store never sees the raw token or the plaintext.
+func (s *Server) handleShareCreate(w http.ResponseWriter, r *http.Request, sess session) {
+	id, ok := pathID(w, r)
+	if !ok {
+		return
+	}
+	sec, err := s.st.SecretByID(r.Context(), id)
+	if err != nil {
+		s.notFoundOrError(w, err)
+		return
+	}
+	plain, err := crypto.Open(sess.key, sec.Ciphertext)
+	if err != nil {
+		s.serverError(w, err)
+		return
+	}
+	token, err := crypto.RandomToken(32)
+	if err != nil {
+		s.serverError(w, err)
+		return
+	}
+	salt, err := crypto.NewSalt()
+	if err != nil {
+		s.serverError(w, err)
+		return
+	}
+	ct, err := crypto.Seal(crypto.DeriveKey(token, salt), plain)
+	if err != nil {
+		s.serverError(w, err)
+		return
+	}
+	tokenHash := sha256.Sum256([]byte(token))
+	expires := time.Now().UTC().Add(shareTTL)
+	if _, err := s.st.InsertShare(r.Context(), tokenHash[:], salt, ct, sec.Name, expires); err != nil {
+		s.serverError(w, err)
+		return
+	}
+	_ = s.st.AppendAudit(r.Context(), "share-create", sec.Name)
+	s.render(w, r, views.ShareLink(shareURL(r, token)))
+}
+
+// shareURL builds the absolute /share/{token} URL shown in the generate fragment
+// (specs/share-links.md "Token": "The share URL is /share/{token}").
+func shareURL(r *http.Request, token string) string {
+	scheme := "https"
+	if r.TLS == nil {
+		scheme = "http"
+	}
+	return scheme + "://" + r.Host + "/share/" + token
 }
 
 // --- auth middleware ---

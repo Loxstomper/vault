@@ -2,6 +2,7 @@ package store
 
 import (
 	"context"
+	"fmt"
 	"time"
 )
 
@@ -23,8 +24,24 @@ type Share struct {
 // InsertShare persists a one-time share row and returns it. The store never sees the raw
 // token, the derivation key, or the plaintext — only the opaque hash, salt, and blob.
 func (s *Store) InsertShare(ctx context.Context, tokenHash, salt, ciphertext []byte, name string, expiresAt time.Time) (Share, error) {
-	// Skeleton only — the implementor writes the parameterized INSERT and the shares
-	// schema. Returns a zero row so the acceptance tests fail on their assertions
-	// (not a compile error), per the red contract.
-	return Share{}, nil
+	now := time.Now().UTC()
+	res, err := s.db.ExecContext(ctx,
+		`INSERT INTO shares (token_hash, salt, ciphertext, name, expires_at, created_at) VALUES (?, ?, ?, ?, ?, ?)`,
+		tokenHash, salt, ciphertext, name, expiresAt, now)
+	if err != nil {
+		return Share{}, fmt.Errorf("store: insert share: %w", err)
+	}
+	id, err := res.LastInsertId()
+	if err != nil {
+		return Share{}, fmt.Errorf("store: insert share id: %w", err)
+	}
+	return Share{
+		ID:         id,
+		TokenHash:  tokenHash,
+		Salt:       salt,
+		Ciphertext: ciphertext,
+		Name:       name,
+		ExpiresAt:  expiresAt,
+		CreatedAt:  now,
+	}, nil
 }
