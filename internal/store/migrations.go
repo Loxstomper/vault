@@ -34,6 +34,21 @@ CREATE TABLE IF NOT EXISTS audit_log (
 	at     TIMESTAMP NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_audit_at ON audit_log (at DESC);
+
+-- shares holds one-time share-link snapshots (specs/share-links.md "Model"). It is
+-- encryption-agnostic like the rest of the store: token_hash is SHA-256(token) (never the
+-- raw token), ciphertext is nonce||ciphertext re-sealed under a token-derived key, and
+-- name is the secret's name snapshot at generation time.
+CREATE TABLE IF NOT EXISTS shares (
+	id         INTEGER PRIMARY KEY AUTOINCREMENT,
+	token_hash BLOB NOT NULL,
+	salt       BLOB NOT NULL,
+	ciphertext BLOB NOT NULL,
+	name       TEXT NOT NULL,
+	expires_at TIMESTAMP NOT NULL,
+	created_at TIMESTAMP NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_shares_token_hash ON shares (token_hash);
 `
 
 func (s *Store) migrate(ctx context.Context) error {

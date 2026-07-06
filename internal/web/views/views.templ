@@ -89,6 +89,25 @@ templ LoginPage(errMsg string) {
 	}
 }
 
+// ShareReveal is the bare, public reveal-and-burn page (specs/share-links.md "Behavior →
+// Reveal" step 5), styled like LoginPage: it shows the secret's name and decrypted value
+// and states plainly that the link is now destroyed and cannot be reused. There is no
+// shell/nav (this route is reachable with no session), and no form — nothing to submit.
+templ ShareReveal(name, value string) {
+	@Layout("Shared secret") {
+		<main class="flex min-h-full items-center justify-center px-6">
+			<div class="w-full max-w-sm space-y-4 rounded-xl border border-slate-800 bg-slate-900/60 p-8">
+				<h1 class="text-lg font-semibold">Shared secret</h1>
+				<div class="space-y-1">
+					<div class="text-sm text-slate-400">{ name }</div>
+					<div class="select-all break-all rounded-md border border-slate-700 bg-slate-950 px-3 py-2 font-mono text-sm text-emerald-300">{ value }</div>
+				</div>
+				<p class="text-sm text-slate-400">This link has now been destroyed and cannot be used again.</p>
+			</div>
+		</main>
+	}
+}
+
 templ VaultPage(secrets []Secret, audit []Audit, query string, stats Stats) {
 	@Layout("Vault") {
 		@shell("vault")
@@ -188,6 +207,11 @@ templ SecretRow(sec Secret) {
 				class="rounded-md border border-slate-700 px-2 py-1 text-slate-300 hover:border-emerald-500 hover:text-emerald-400">Reveal</button>
 			<a href={ templ.SafeURL("/secrets/" + itoa64(sec.ID) + "/edit") } class="rounded-md border border-slate-700 px-2 py-1 text-slate-300 hover:text-slate-100">Edit</a>
 			<button
+				hx-post={ "/secrets/" + itoa64(sec.ID) + "/share" }
+				hx-target={ "#share-" + itoa64(sec.ID) }
+				hx-swap="innerHTML"
+				class="rounded-md border border-slate-700 px-2 py-1 text-slate-300 hover:border-emerald-500 hover:text-emerald-400">Share</button>
+			<button
 				hx-delete={ "/secrets/" + itoa64(sec.ID) }
 				hx-target={ "#secret-" + itoa64(sec.ID) }
 				hx-swap="outerHTML"
@@ -196,11 +220,31 @@ templ SecretRow(sec Secret) {
 			<span id={ "reveal-" + itoa64(sec.ID) } class="font-mono text-xs text-emerald-300"></span>
 		</div>
 	</div>
+	<div id={ "share-" + itoa64(sec.ID) } class="px-4"></div>
 }
 
 // RevealValue is the htmx fragment swapped in when a secret is revealed.
 templ RevealValue(value string) {
 	<span class="select-all font-mono text-xs text-emerald-300">{ value }</span>
+}
+
+// ShareLink is the htmx fragment swapped in after a one-time share link is generated
+// (specs/share-links.md "Behavior → Generate"): the full share URL plus a
+// copy-to-clipboard button. Uses Alpine (already vendored) for the clipboard write, not
+// an inline onclick, per the htmx/templ convention — Alpine's x-on is a plain attribute
+// string, unlike an on* handler with an interpolated Go expression.
+templ ShareLink(url string) {
+	<div x-data={ alpineShareData(url) } class="flex items-center gap-2 py-2 text-xs">
+		<input readonly value={ url } x-ref="input"
+			class="min-w-0 flex-1 rounded-md border border-slate-700 bg-slate-950 px-2 py-1 font-mono text-emerald-300"/>
+		<button
+			type="button"
+			x-on:click="navigator.clipboard.writeText(url); copied = true"
+			class="rounded-md border border-slate-700 px-2 py-1 text-slate-300 hover:border-emerald-500 hover:text-emerald-400">
+			<span x-show="!copied">Copy</span>
+			<span x-show="copied" x-cloak>Copied!</span>
+		</button>
+	</div>
 }
 
 templ SecretForm(title string, s Secret, errMsg string) {
