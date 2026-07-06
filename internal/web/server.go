@@ -73,6 +73,13 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("POST /secrets/{id}", s.auth(s.handleUpdate))
 	s.mux.HandleFunc("DELETE /secrets/{id}", s.auth(s.handleDelete))
 	s.mux.HandleFunc("GET /secrets/{id}/reveal", s.auth(s.handleReveal))
+	s.mux.HandleFunc("POST /secrets/{id}/share", s.auth(s.handleShareCreate))
+}
+
+// handleShareCreate is the generate half of the one-time share-link feature. Stub: the
+// real behavior is defined by the acceptance tests and supplied by the implementor.
+func (s *Server) handleShareCreate(w http.ResponseWriter, r *http.Request, _ session) {
+	w.WriteHeader(http.StatusNotImplemented)
 }
 
 // --- auth middleware ---
