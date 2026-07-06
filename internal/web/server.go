@@ -79,6 +79,17 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("DELETE /secrets/{id}", s.auth(s.handleDelete))
 	s.mux.HandleFunc("GET /secrets/{id}/reveal", s.auth(s.handleReveal))
 	s.mux.HandleFunc("POST /secrets/{id}/share", s.auth(s.handleShareCreate))
+
+	// Reveal is a PUBLIC route: it is registered WITHOUT the auth middleware so it is
+	// reachable with no session cookie (specs/share-links.md "Behavior → Reveal").
+	s.mux.HandleFunc("GET /share/{token}", s.handleShareReveal)
+}
+
+// handleShareReveal is the reveal-and-burn half of the one-time share-link feature
+// (specs/share-links.md "Behavior → Reveal"). Skeleton only: the implementor supplies the
+// constant-time lookup, atomic single-use consumption, decryption, audit entry, and page.
+func (s *Server) handleShareReveal(w http.ResponseWriter, r *http.Request) {
+	http.Error(w, "not implemented", http.StatusNotImplemented)
 }
 
 // handleShareCreate is the generate half of the one-time share-link feature
