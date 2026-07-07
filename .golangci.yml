@@ -35,6 +35,10 @@ linters:
           - errcheck
           - unparam
         path: _test\.go
+      - linters:
+          - gocritic
+        text: "stringXbytes"
+        path: _test\.go
     paths:
       - .*_templ\.go$
       - third_party$
