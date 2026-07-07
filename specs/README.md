@@ -16,6 +16,7 @@ demand rather than expecting them all in context.
 | [auth.md](auth.md) | First-run setup, master-password login, session lifetime, sign-out. |
 | [secrets.md](secrets.md) | The secret model, encryption at rest, create/edit/delete, reveal, search, expiry. |
 | [audit.md](audit.md) | The append-only audit log and the dashboard activity feed. |
+| [share-links.md](share-links.md) | One-time, single-use public share links for revealing a secret's value without a session. |
 
 ## Conventions
 

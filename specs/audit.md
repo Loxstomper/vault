@@ -1,8 +1,8 @@
 # Audit log
 
 Every sensitive action is recorded in an append-only audit log so the owner can see what
-happened to the vault and when. See [secrets.md](secrets.md) and [auth.md](auth.md) for the
-actions that emit entries.
+happened to the vault and when. See [secrets.md](secrets.md), [auth.md](auth.md), and
+[share-links.md](share-links.md) for the actions that emit entries.
 
 ## Model
 
@@ -15,6 +15,11 @@ account-level actions), and a UTC timestamp. Stored in the `audit_log` table. Th
 - `login` — a successful authentication (target empty).
 - `create`, `update`, `delete` — secret lifecycle (target = secret name).
 - `reveal` — a secret's value was decrypted and shown (target = secret name).
+- `share-create` — a one-time share link was generated for a secret (target = secret
+  name). See [share-links.md](share-links.md).
+- `share-reveal` — a share link's value was decrypted and shown via the public reveal
+  endpoint (target = the secret name snapshotted on the share). See
+  [share-links.md](share-links.md).
 
 ## Dashboard activity feed
 
