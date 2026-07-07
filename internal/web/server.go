@@ -73,6 +73,22 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("POST /secrets/{id}", s.auth(s.handleUpdate))
 	s.mux.HandleFunc("DELETE /secrets/{id}", s.auth(s.handleDelete))
 	s.mux.HandleFunc("GET /secrets/{id}/reveal", s.auth(s.handleReveal))
+	s.mux.HandleFunc("POST /secrets/{id}/share", s.auth(s.handleShareCreate))
+
+	// The public reveal endpoint is deliberately NOT wrapped in s.auth: it must be
+	// reachable with no session cookie at all (see specs/share-links.md).
+	s.mux.HandleFunc("GET /share/{token}", s.handleShareReveal)
+}
+
+// handleShareCreate generates a one-time share link for a secret. Stub: not implemented.
+func (s *Server) handleShareCreate(w http.ResponseWriter, r *http.Request, sess session) {
+	http.Error(w, "not implemented", http.StatusNotImplemented)
+}
+
+// handleShareReveal reveals-and-burns a share link (public, no session). Stub: not
+// implemented.
+func (s *Server) handleShareReveal(w http.ResponseWriter, r *http.Request) {
+	http.Error(w, "not implemented", http.StatusNotImplemented)
 }
 
 // --- auth middleware ---
