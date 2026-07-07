@@ -34,6 +34,17 @@ CREATE TABLE IF NOT EXISTS audit_log (
 	at     TIMESTAMP NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_audit_at ON audit_log (at DESC);
+
+CREATE TABLE IF NOT EXISTS shares (
+	id          INTEGER PRIMARY KEY AUTOINCREMENT,
+	token_hash  BLOB NOT NULL UNIQUE,
+	salt        BLOB NOT NULL,
+	blob        BLOB NOT NULL,
+	secret_name TEXT NOT NULL,
+	created_at  TIMESTAMP NOT NULL,
+	expires_at  TIMESTAMP NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_shares_token_hash ON shares (token_hash);
 `
 
 func (s *Store) migrate(ctx context.Context) error {

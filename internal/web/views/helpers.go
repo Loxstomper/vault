@@ -1,6 +1,7 @@
 package views
 
 import (
+	"encoding/json"
 	"strconv"
 
 	"github.com/a-h/templ"
@@ -8,6 +9,13 @@ import (
 
 func itoa(n int) string     { return strconv.Itoa(n) }
 func itoa64(n int64) string { return strconv.FormatInt(n, 10) }
+
+// jsonString renders s as a JSON string literal, for safely embedding a Go string inside
+// an Alpine x-data expression (which templ treats as plain attribute text, not script).
+func jsonString(s string) string {
+	b, _ := json.Marshal(s)
+	return string(b)
+}
 
 // formAction is the POST target for the secret form: /secrets for a new secret (id 0),
 // /secrets/{id} for an edit.

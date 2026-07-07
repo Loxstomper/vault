@@ -4,6 +4,8 @@
 package web
 
 import (
+	"crypto/sha256"
+	"crypto/subtle"
 	"embed"
 	"errors"
 	"net/http"
@@ -15,6 +17,10 @@ import (
 	"github.com/harness-demo/vault/internal/store"
 	"github.com/harness-demo/vault/internal/web/views"
 )
+
+// shareTTL is the fixed, non-configurable lifetime of a share link (specs/share-links.md:
+// "Configurable expiry" is explicitly out of scope).
+const shareTTL = time.Hour
 
 //go:embed static
 var staticFS embed.FS
@@ -80,15 +86,85 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("GET /share/{token}", s.handleShareReveal)
 }
 
-// handleShareCreate generates a one-time share link for a secret. Stub: not implemented.
+// handleShareCreate generates a one-time share link for a secret (specs/share-links.md
+// "Generating a share (authenticated)"). It decrypts with the session key exactly as
+// handleReveal does, then re-seals under a fresh token-derived key so the persisted row
+// never depends on the session/master key.
 func (s *Server) handleShareCreate(w http.ResponseWriter, r *http.Request, sess session) {
-	http.Error(w, "not implemented", http.StatusNotImplemented)
+	id, ok := pathID(w, r)
+	if !ok {
+		return
+	}
+	sec, err := s.st.SecretByID(r.Context(), id)
+	if err != nil {
+		s.notFoundOrError(w, err)
+		return
+	}
+	plain, err := crypto.Open(sess.key, sec.Ciphertext)
+	if err != nil {
+		http.Error(w, "cannot decrypt", http.StatusInternalServerError)
+		return
+	}
+
+	token, err := crypto.RandomToken(32)
+	if err != nil {
+		s.serverError(w, err)
+		return
+	}
+	salt, err := crypto.NewSalt()
+	if err != nil {
+		s.serverError(w, err)
+		return
+	}
+	shareKey := crypto.DeriveKey(token, salt)
+	blob, err := crypto.Seal(shareKey, plain)
+	if err != nil {
+		s.serverError(w, err)
+		return
+	}
+	tokenHash := sha256.Sum256([]byte(token))
+	expiresAt := time.Now().UTC().Add(shareTTL)
+	if err := s.st.CreateShare(r.Context(), tokenHash[:], salt, blob, sec.Name, expiresAt); err != nil {
+		s.serverError(w, err)
+		return
+	}
+	_ = s.st.AppendAudit(r.Context(), "share-create", sec.Name)
+	s.render(w, r, views.ShareLink("/share/"+token))
 }
 
-// handleShareReveal reveals-and-burns a share link (public, no session). Stub: not
-// implemented.
+// handleShareReveal reveals-and-burns a share link (specs/share-links.md "Revealing a
+// share (public, no session)"). It is deliberately not wrapped in s.auth: it must work
+// with no session cookie. Missing, expired, and already-consumed tokens are all
+// indistinguishable 404s.
 func (s *Server) handleShareReveal(w http.ResponseWriter, r *http.Request) {
-	http.Error(w, "not implemented", http.StatusNotImplemented)
+	token := r.PathValue("token")
+	tokenHash := sha256.Sum256([]byte(token))
+	sh, err := s.st.ConsumeShare(r.Context(), tokenHash[:])
+	if errors.Is(err, store.ErrNotFound) {
+		http.NotFound(w, r)
+		return
+	}
+	if err != nil {
+		s.serverError(w, err)
+		return
+	}
+	// Defense in depth: confirm the row we got back really matches the presented token's
+	// hash, in constant time, even though the store already selected by exact hash match
+	// (specs/share-links.md: "using a constant-time comparison (subtle.ConstantTimeCompare)
+	// — never a raw =="). A mismatch here cannot legitimately happen, but if it somehow
+	// did, treat it as not-found rather than trusting the row.
+	if subtle.ConstantTimeCompare(sh.TokenHash, tokenHash[:]) != 1 {
+		http.NotFound(w, r)
+		return
+	}
+	shareKey := crypto.DeriveKey(token, sh.Salt)
+	plain, err := crypto.Open(shareKey, sh.Blob)
+	if err != nil {
+		http.NotFound(w, r)
+		return
+	}
+	_ = s.st.AppendAudit(r.Context(), "share-reveal", sh.SecretName)
+	s.render(w, r, views.SharePage(sh.SecretName, string(plain)))
 }
 
 // --- auth middleware ---
