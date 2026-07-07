@@ -8,6 +8,7 @@ import (
 	"crypto/subtle"
 	"embed"
 	"errors"
+	"log"
 	"net/http"
 	"strconv"
 	"strings"
@@ -102,6 +103,10 @@ func (s *Server) handleShareCreate(w http.ResponseWriter, r *http.Request, sess 
 	}
 	plain, err := crypto.Open(sess.key, sec.Ciphertext)
 	if err != nil {
+		// The secret cannot be opened with this session's key — a data/state problem
+		// (e.g. a secret sealed under a different master key than the current login
+		// derives), not a bug in this handler. Log which secret so it is diagnosable.
+		log.Printf("vault: share: cannot decrypt secret %d (%q) with session key: %v", sec.ID, sec.Name, err)
 		http.Error(w, "cannot decrypt", http.StatusInternalServerError)
 		return
 	}
@@ -409,6 +414,7 @@ func (s *Server) handleReveal(w http.ResponseWriter, r *http.Request, sess sessi
 	}
 	plain, err := crypto.Open(sess.key, sec.Ciphertext)
 	if err != nil {
+		log.Printf("vault: reveal: cannot decrypt secret %d (%q) with session key: %v", sec.ID, sec.Name, err)
 		http.Error(w, "cannot decrypt", http.StatusInternalServerError)
 		return
 	}
@@ -447,6 +453,9 @@ func (s *Server) notFoundOrError(w http.ResponseWriter, err error) {
 	s.serverError(w, err)
 }
 
-func (s *Server) serverError(w http.ResponseWriter, _ error) {
+func (s *Server) serverError(w http.ResponseWriter, err error) {
+	// Log the underlying cause: the client only ever sees a generic 500, so without this
+	// an internal error is invisible and undiagnosable from the outside.
+	log.Printf("vault: internal error: %v", err)
 	http.Error(w, "internal error", http.StatusInternalServerError)
 }
